@@ -1,0 +1,176 @@
+---
+title: "lessons01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE,message=FALSE)
+library(tidyverse)
+library(gridExtra)
+# Librerías a instalar:
+# hflights
+# Hmisc
+# pastecs
+# skimr
+# psych
+```
+
+NOTA: Verifica que tienes instaladas previamente todas las librerías anteriores
+## Objetos tibble y dplyr
+
+Un objeto *tibble* es un data.frame especial que permite visualizar y trabajar con los datos de un modo más sintético, y optimizar las funciones en las librerías *tidyverse*.
+
+### Ejemplo
+Partamos de un objeto tipo data.frame.
+Los comandos `str` y `glimpse` dan información sobre el tipo de las variables contenidas en un objeto tibble. `class`da información sobre el tipo de objeto. Con `head` visualizamos las 10 primeras filas del objeto.
+```{r}
+library(hflights)
+data(hflights)
+class(hflights)
+head(hflights)
+str(hflights)
+glimpse(hflights)
+```
+
+A partir de un data.frame cualquiera podemos construir un objeto tibble simplemente con la sintaxis `as_tibble()`, o con `tbl_df()` aplicada a dicho data.frame. 
+```{r}
+hflights=tbl_df(hflights)
+hflights=as_tibble(hflights)
+class(hflights)
+glimpse(hflights)
+hflights
+```
+
+## Verbos en *dplyr*
+El paquete dplyr (contenido en tidyverse) contiene cinco funciones clave de manipulación de datos, también llamadas verbos:
+
+- select(), (y rename()) que devuelve un subconjunto de las columnas, 
+- filter(), (y slice()) que devuelve un subconjunto de las filas, 
+- arrange(), que reordena las filas de acuerdo a una o varias variables,
+- mutate(), transmute() que se usan para añadir columnas a partir de datos (o columnas) ya existentes,
+- summarise(), que reduce grupos de observaciones a través de un descriptivo agregado.
+
+La librería dplyr tiene una buena variedad de funciones para manipular datos:
+- group_by(), para agrupar un objeto según una variable de clasificación,
+- distinct(), que retiene sólo las filas únicas y distintas de un objeto tbl,
+- sample_n() y sample_frac(), que proporciona muestras aleatorias del banco de datos,
+- inner_join(), left_join() y right_join(), para emparejar bases de datos en función de una o varias variables clave coincidentes.
+
+Ampliar información en [dplyr](https://dplyr.tidyverse.org/).
+
+El operador *pipe* `%>%` nos permite concatenar sucesivas instrucciones de *dplyr.*
+
+### Ejemplos
+```{r}
+# Consulta los nombres de hflights
+names(hflights)
+
+# Selecciona las cuatro primeras columnas de hflights
+select(hflights,ActualElapsedTime, AirTime, ArrDelay, DepDelay)
+select(hflights,1:4)
+
+# Selecciona las columnas que contienen "Delay", empiezan con "Cancel" y acaban con "Num"
+select(hflights,contains("Delay"),ends_with("Num"),starts_with("Cancel"))
+
+# Añade una nueva variable ActualGroundTime como la resta de ActualElapsedTime y AirTime.
+g1=mutate(hflights,ActualGroundTime=ActualElapsedTime-AirTime)
+
+# Filtra los vuelos que han viajado 3000 millas o más. 
+filter(hflights,Distance>=3000)
+
+# Filtra todos los vuelos que volaron con  JetBlue, Southwest, o Delta
+filter(hflights,UniqueCarrier %in% c("JetBlue", "Southwest","Delta"))
+
+# Resume los datos calculando media, mínimo y máxima Distance recorrida. 
+summarise(hflights,m_dist=mean(Distance),min_dist=min(Distance),max_dist=max(Distance))
+
+# Resume los datos contando el número de observaciones, el número de compañías distintas y el número de destinos distintos.
+summarise(hflights,
+          n_obs = n(),
+          n_carrier = n_distinct(UniqueCarrier),
+          n_dest = n_distinct(Dest))
+
+# Agrupa por compañía de vuelo y calcula la Distance media recorrida
+hflights %>% group_by(UniqueCarrier)%>%
+            summarise(m_distance=mean(Distance))
+```
+
+
+
+## Descriptivos
+
+Para calcular directamente los descriptivos de todas las variables en un data.frame, podemos utilizar varias alternativas:
+
+* describe, from the *Hmisc* package
+* stat.desc from *pastecs*
+* describe from *psych*
+* skim from *skimr*
+
+Fuente [dabblingwithdata](https://dabblingwithdata.wordpress.com/2018/01/02/my-favourite-r-package-for-summarising-data/)
+
+### Ejercicio
+Prueba las salidas que producen los descriptivos mencionados antes.
+
+```{r, echo=TRUE}
+datos<-mtcars
+datos$vs<-factor(datos$vs)
+
+library(Hmisc)
+Hmisc::describe(datos)
+#-------------------------
+library(pastecs)
+pastecs::stat.desc(datos)
+#-------------------------
+library(psych)
+psych::describe(datos)
+psych::describeBy(datos,datos$vs)
+psych::describeBy(datos, datos$vs, mat = TRUE)
+#-------------------------
+library(skimr)
+skim(datos)
+group_by(datos, vs) %>%
+ skim()
+```
+
+## Visualizar datos
+Las preguntas/objetivos que nos proponemos son:
+1. ¿Cómo afecta la concentración de sustrato a la velocidad de reacción encimática? ¿Qué tipo de tendencia se aprecia? ¿Crece/decrece de modo constante?
+2. ¿Afecta de modo diferente para los tratados con puromycin y los controles (no tratados)?
+3. A menores concentraciones, ¿cuánto afecta a la velocidad de reacción el hecho de tratar o no con puromycin,  si variamos en 5 unidades de concentración el sustrato? ¿Y a concentraciones medias? ¿Y a mayores concentraciones? ¿Dónde es más evidente el efecto del puromycin?
+
+Reproduce con ggplot2 los gráficos básicos con la base de datos Puromycin, para dar respuesta a estas cuestiones. 
+
+```{r}
+data("Puromycin")
+dataset=Puromycin
+names(dataset)
+
+# 1. Indagamos cómo es la variable respuesta
+# histograma de rate
+g1=ggplot(dataset,aes(x=rate))+
+  geom_histogram(fill="skyblue",color="grey")
+# Modifica los intervalos y su amplitud
+?geom_histogram
+g2=ggplot(dataset,aes(x=rate))+
+  geom_histogram(binwidth=50,fill="violet",color="grey")
+g3=ggplot(dataset,aes(x=rate))+
+  geom_histogram(bins=10,fill="orange",color="grey")
+
+grid.arrange(g1,g2,g3,ncol=3)
+
+# 2. Indagamos la relación con concentración para responder las preguntas planteadas
+ggplot(dataset,aes(x=conc,y=rate))+
+         geom_point(size=3)
+# distinguimos para los que reciben puromycin y los que no
+ggplot(dataset,aes(x=conc,y=rate))+
+         geom_point(aes(color=state),size=3)
+# superponemos una línea de tendencia 
+ggplot(dataset,aes(x=conc,y=rate))+
+         geom_point(aes(color=state),size=3)+
+  geom_smooth(stat="smooth")
+# superponemos una línea de tendencia para las observaciones tratadas y otra para las no tratadas con puromycin
+ggplot(dataset,aes(x=conc,y=rate,group=state))+
+         geom_point(aes(color=state),size=3)+
+        geom_smooth(stat="smooth",aes(color=state))
+```
+
