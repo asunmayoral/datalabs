@@ -1,0 +1,211 @@
+---
+title: "COVID-19: Un estudio sobre su incidencia real."
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DT)
+library(tidyverse)
+library(RColorBrewer)
+library(gridExtra)
+library(lubridate)
+
+miscolores<-c("#ec1d23","#f7901e","#e6e616", "#89c53f","#11aecf","#21439c","#a34198")
+colores_fill<- scale_fill_manual(values=miscolores)
+colores_color<-scale_color_manual(values=miscolores)
+
+#colores_fill <- scale_fill_brewer(palette = "RdYlBu",direction=-1)
+#colores_color <- scale_color_brewer(palette = "RdYlBu",direction=-1)
+# display.brewer.all()
+#display.brewer.pal(9,"RdYlBu")
+posn.d <-position_dodge(width=0.2)
+posn.jd <-position_jitterdodge(jitter.width=0.1,dodge.width=0.2)
+posn.j <-position_jitter(width=0.2)
+old <- theme_set(theme_minimal())
+```
+
+Toda la información está actualizada a 11 de marzo de 2020.
+
+El Center for Systems Science and Engineering (CSSE) at Johns Hopkins University (JHU), proporciona un mapa mundial con los casos confirmados, muertos y recuperados en [Coronavirus COVID-19 Global Cases](https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf6).
+
+Los datos con los casos de COVID-19 se descargan con actualizaciones diarias desde el [European Centre for Disease Prevention and Control](https://www.ecdc.europa.eu/en/publications-data/download-todays-data-geographic-distribution-covid-19-cases-worldwide).
+
+La población mundial en 2020 se ha obtenido de [Wordometers.info](https://www.worldometers.info/world-population/population-by-country/).
+
+Los datos de casos de COVID por comunidad autónoma en España se han obtenido de la web del [Ministerio de Sanidad](https://www.mscbs.gob.es/profesionales/saludPublica/ccayes/alertasActual/nCov-China/situacionActual.htm). El tamaño de la población, por comunidad autónoma, se ha extraído del [INE](https://www.ine.es/jaxiT3/Tabla.htm?t=2853&L=0), referida a 2019.
+
+```{r}
+setwd("~/Dropbox/ESTADISTICA/DATALABS")
+datos=read.csv( file="covid19-11032020.csv",sep=";")
+#str(datos)
+datos$DateRep=as_date(dmy(datos$DateRep))
+#levels(datos$CountryExp)
+topcountries=c("China","Italy","Iran","South Korea","France","Spain","Germany","United States of America") 
+uecountries=c("Italy","France","Spain","Germany")
+asiacountries=c("China","South Korea","Iran","Japan")
+population=tibble(CountryExp=c("China","Italy","Iran","South Korea","France","Spain","Germany","United States of America","Japan"),
+                  pop=c(1439323776,60461826,83992949,51269185,65273511,46754778,83783942,331002651,126476461))
+
+```
+
+### ¿Cómo ha evolucionado el número de casos nuevos de contagio?
+
+Representamos los nuevos casos de contagio, en términos absolutos y relativos respecto del tamaño de la población.
+```{r message=FALSE, warning=FALSE}
+g1=datos %>%
+  filter(CountryExp %in% uecountries,
+         DateRep>=as.Date("2020-02-20")) %>%
+  ggplot(aes(x=DateRep,y=NewConfCases))+ 
+    geom_line(aes(color=CountryExp)) +
+  labs(x="",y="Nuevos casos por día",color="País")+
+  theme(legend.position = "bottom")
+
+g2=datos %>%
+  filter(CountryExp %in% uecountries,
+         DateRep>=as.Date("2020-02-20")) %>%
+  left_join(population,by="CountryExp")%>%
+  mutate(ratio=NewConfCases/pop)%>%
+  ggplot(aes(x=DateRep,y=ratio*100000))+ 
+    geom_line(aes(color=CountryExp)) +
+  labs(x="",y="Nuevos casos por día, por cada 100.000 habitantes",color="País")+
+    theme(legend.position = "bottom")
+
+grid.arrange(g1,g2,ncol=2)
+```
+
+
+### ¿Cómo ha ido creciendo el número de contagios totales (acumulados), relativo al tamaño de la población?
+
+Calculamos el número de nuevos casos de contagio acumulados por cada 100.000 habitantes. Representamos también los valores absolutos en los países asiáticos, en los que el efecto poblacional de China es destacable.
+```{r warning=FALSE}
+datos %>%
+  filter(CountryExp %in% uecountries, DateRep>=as.Date("2020-02-20")) %>%
+  arrange(DateRep) %>%
+  left_join(population,by="CountryExp")%>%
+  group_by(CountryExp)%>%
+  mutate(cum=cumsum(NewConfCases)/pop*100000)%>%
+  ggplot(aes(x=DateRep,y=cum))+ 
+    geom_line(aes(color=CountryExp))+
+  labs(x="",y="Número total contagios/100.000 habitantes",color="País")
+
+g1=datos %>%
+  filter(CountryExp %in% asiacountries) %>%
+  arrange(DateRep) %>%
+  left_join(population,by="CountryExp")%>%
+  group_by(CountryExp)%>%
+  mutate(cum=cumsum(NewConfCases)/pop*100000)%>%
+  ggplot(aes(x=DateRep,y=cum))+ 
+    geom_line(aes(color=CountryExp))+
+  labs(x="",y="Número total de contagios/100.000 habitantes.",color="País")+
+  theme(legend.position = "bottom")
+  
+
+g2=datos %>%
+  filter(CountryExp %in% asiacountries) %>%
+  arrange(DateRep) %>%
+  group_by(CountryExp)%>%
+  mutate(cum=cumsum(NewConfCases))%>%
+  ggplot(aes(x=DateRep,y=cum))+ 
+    geom_line(aes(color=CountryExp))+
+  labs(x="",y="Número total de contagios.",color="País")+
+   theme(legend.position = "bottom")
+
+grid.arrange(g1,g2,ncol=2)
+```
+
+### ¿Cómo ha ido creciendo la cifra de muertos por COVID-19 durante los últimos dos meses?
+
+Calculamos y representamos el número de muertes acumuladas en cada país, relativizada por el tamaño de la población. Expresamos los datos en número de muertes por cada millón de habitantes.
+
+```{r warning=FALSE}
+tasa=1000000
+datos %>%
+  filter(CountryExp %in% uecountries, DateRep>=as.Date("2020-02-20")) %>%
+  arrange(DateRep) %>%
+  left_join(population,by="CountryExp") %>%
+  group_by(CountryExp)%>%
+  mutate(cum=cumsum(NewDeaths)/pop*tasa)%>%
+  ggplot(aes(x=DateRep,y=cum))+ 
+    geom_line(aes(color=CountryExp)) +
+  labs(x="",y="Número muertes por COVID-19 / millón habitantes",color="País")
+
+datos %>%
+  filter(CountryExp %in% uecountries[-1], DateRep>=as.Date("2020-02-20")) %>%
+  arrange(DateRep) %>%
+  left_join(population,by="CountryExp") %>%
+  group_by(CountryExp)%>%
+  mutate(cum=cumsum(NewDeaths)/pop*tasa)%>%
+  ggplot(aes(x=DateRep,y=cum))+ 
+    geom_line(aes(color=CountryExp)) +
+  labs(x="",y="Número muertes por COVID-19 / millón habitantes",color="País")
+
+datos %>%
+  filter(CountryExp %in% asiacountries) %>%
+  arrange(DateRep) %>%
+  left_join(population,by="CountryExp") %>%
+  group_by(CountryExp)%>%
+  mutate(cum=cumsum(NewDeaths)/pop*tasa)%>%
+  ggplot(aes(x=DateRep,y=cum))+ 
+    geom_line(aes(color=CountryExp)) +
+  labs(x="",y="Número muertes por COVID-19 / millón habitantes",color="País")
+```
+
+### ¿Cómo es de contagiosa la enfermedad? 
+
+Para investigar lo contagiosa que es la enfermedad, utilizamos dos indicadores:
+
+- la tasa de contagios total que se han producido en cada país, expresada en número total de contagios por cada 100.000 habitantes:
+- la tasa de contagios en el día en que más contagios se han producido en cada país, expresada en número de casos nuevos en un día por cada 100.000 habitantes.
+
+Identificamos el día en que se produjeron más contagios en cada país, y extraemos el dato del número de casos nuevos de contagios. A continuación relativizamos este número por el tamaño de la población y lo expresamos en escala de nuevos contagios por cada 100.000 habitantes.
+Calculamos la tasa de contagio, respecto del máximo de contagios registrados, por cada 100.000 habitantes.
+
+```{r warning=FALSE}
+tasa=100000
+df=datos %>%
+  filter(CountryExp %in% topcountries) %>%
+  left_join(population,by="CountryExp")%>%
+  arrange(DateRep) %>%
+  group_by(CountryExp)%>%
+  mutate(cumc=cumsum(NewConfCases))%>%
+  summarise(n.casos.total=max(cumc),n.casos.nuevos.dia=max(NewConfCases),pop=max(pop)) %>%
+  mutate(tasa.contagio.total=round(n.casos.total/pop*tasa,1),
+         tasa.contagio.maxdia=round(n.casos.nuevos.dia/pop*tasa,1))
+datatable(df)
+```
+
+
+### ¿Cómo es de letal la enfermedad?
+Calculamos la tasa de muertes por cada 100 contagiados y la  tasa de muertes por cada millón de habitantes.
+
+```{r warning=FALSE}
+tasa=100000
+df=datos %>%
+  filter(CountryExp %in% topcountries) %>%
+  left_join(population,by="CountryExp")%>%
+  arrange(DateRep) %>%
+  group_by(CountryExp)%>%
+  mutate(cumc=cumsum(NewConfCases),cumd=cumsum(NewDeaths))%>%
+  summarise(n.deaths=max(cumd),n.cases=max(cumc),pop=max(pop)) %>%
+  mutate(tasa.muerte.contagiados=round(n.deaths/n.cases*100,2),
+         tasa.muerte.millon.habit=round(n.deaths/pop*1000000,2))
+datatable(df)
+```
+
+## En España, ¿cuál es la incidencia de la enfermedad por comunidad autónoma?
+
+Calculamos el número total de contagios por comunidad autónoma relativizado por cada 100.000 habitantes.
+```{r}
+datos.spain=read.csv(file="covid-spain.csv",sep=",")
+datos.spain=as.tbl(datos.spain)
+
+datatable(datos.spain[-(3:4)])
+  
+```
+
+Como siguiente paso se nos ocurre comparar las tasas de afectados y mortalidad con los accidentes de tráfico en territorio español. Los datos para 2018 están disponibles en la web de la [DGT](http://www.dgt.es/es/seguridad-vial/estadisticas-e-indicadores/accidentes-30dias/tablas-estadisticas/2018/).
